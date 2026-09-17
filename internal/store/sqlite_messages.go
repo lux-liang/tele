@@ -25,7 +25,7 @@ func (s *SQLiteStore) Messages(chatID int64) []domain.Message {
 func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.setMessagesLocked(chatID, msgs, len(msgs))
+	s.setMessagesLocked(chatID, msgs, len(msgs), "SetMessages")
 }
 
 // MergeMessages merges a fetched page into a chat's stored history and reports
@@ -43,7 +43,7 @@ func (s *SQLiteStore) MergeMessages(chatID int64, msgs []domain.Message) int {
 	defer s.mu.Unlock()
 	held := s.messages[chatID]
 	merged := domain.MergeMessages(held, msgs)
-	s.setMessagesLocked(chatID, merged, len(merged))
+	s.setMessagesLocked(chatID, merged, len(merged), "MergeMessages")
 	return len(merged) - len(held)
 }
 
@@ -60,7 +60,7 @@ func (s *SQLiteStore) RepairMessages(chatID int64, msgs []domain.Message) int {
 	defer s.mu.Unlock()
 	held := s.messages[chatID]
 	merged := domain.MergeMessages(held, msgs)
-	s.setMessagesLocked(chatID, merged, s.msgFloor[chatID])
+	s.setMessagesLocked(chatID, merged, s.msgFloor[chatID], "RepairMessages")
 	// What the page brought, counted before the cap trims the other end: a
 	// repair that adds fifty and pushes fifty older ones out still changed
 	// every window looking at it.
@@ -70,10 +70,13 @@ func (s *SQLiteStore) RepairMessages(chatID int64, msgs []domain.Message) int {
 // setMessagesLocked replaces a chat's history with msgs, taking a copy: the
 // slice handed in may be the caller's own, or the store's own held slice come
 // back through a merge. floor is how deep this write claims the chat was
-// filled, which is what the cap will not trim below. Caller holds the lock.
-func (s *SQLiteStore) setMessagesLocked(chatID int64, msgs []domain.Message, floor int) {
+// filled, which is what the cap will not trim below. via names the write for
+// the reaction trace. Caller holds the lock.
+func (s *SQLiteStore) setMessagesLocked(chatID int64, msgs []domain.Message, floor int, via string) {
 	cp := make([]domain.Message, len(msgs))
 	copy(cp, msgs)
+	held := s.heldReactionsLocked(chatID)
+	defer s.traceHeldReactionsLocked(chatID, via, held)
 
 	newIDs := make(map[int]struct{}, len(cp))
 	for _, m := range cp {
@@ -377,6 +380,7 @@ func (s *SQLiteStore) AppendMessage(msg domain.Message) bool {
 	if msg.ID > 0 {
 		for i := range s.messages[msg.ChatID] {
 			if s.messages[msg.ChatID][i].ID == msg.ID {
+				s.traceReactionChangeLocked(msg.ChatID, msg.ID, "AppendMessage", s.messages[msg.ChatID][i].Reactions, msg.Reactions)
 				s.messages[msg.ChatID][i] = msg
 				s.markMsgDirtyLocked(msg.ChatID, msg.ID)
 				return false
@@ -483,6 +487,7 @@ func (s *SQLiteStore) UpdateMessageReactions(chatID int64, msgID int, reactions 
 		if s.messages[chatID][i].ID == msgID {
 			cp := make([]domain.Reaction, len(reactions))
 			copy(cp, reactions)
+			s.traceReactionChangeLocked(chatID, msgID, "UpdateMessageReactions", s.messages[chatID][i].Reactions, cp)
 			s.messages[chatID][i].Reactions = cp
 			s.markMsgDirtyLocked(chatID, msgID)
 			return
@@ -517,6 +522,7 @@ func (s *SQLiteStore) ReplaceMessage(chatID int64, msg domain.Message) {
 	defer s.mu.Unlock()
 	for i := range s.messages[chatID] {
 		if s.messages[chatID][i].ID == msg.ID {
+			s.traceReactionChangeLocked(chatID, msg.ID, "ReplaceMessage", s.messages[chatID][i].Reactions, msg.Reactions)
 			s.messages[chatID][i] = msg
 			s.markMsgDirtyLocked(chatID, msg.ID)
 			return

@@ -98,11 +98,21 @@ func (o *Owner) SendReaction(ctx context.Context, chatID int64, msgID int, emoji
 	}
 	prev := make([]domain.Reaction, len(msg.Reactions))
 	copy(prev, msg.Reactions)
-	o.state.ApplyReactions(chatID, msgID, optimisticReactions(prev, emoji), false)
+	next := optimisticReactions(prev, emoji)
+	// Reaction trace (#248): the store logs every set it writes; these lines say
+	// which of those writes were ours and what was picked.
+	o.log.Debug("reaction: optimistic",
+		zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID), zap.String("picked", emoji),
+		zap.String("was", domain.FormatReactions(prev)), zap.String("now", domain.FormatReactions(next)))
+	o.state.ApplyReactions(chatID, msgID, next, false)
 	if err := o.client.SendReaction(ctx, peer, msgID, reactionToSend(prev, emoji)); err != nil {
+		o.log.Debug("reaction: rollback",
+			zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID),
+			zap.String("to", domain.FormatReactions(prev)), zap.Error(err))
 		o.state.ApplyReactions(chatID, msgID, prev, false)
 		return err
 	}
+	o.log.Debug("reaction: sent", zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID))
 	return nil
 }
 

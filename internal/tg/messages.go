@@ -562,16 +562,31 @@ func (c *GotdClient) SendReaction(ctx context.Context, peer domain.Peer, msgID i
 		return err
 	}
 	c.traceLog.Debug("SendReaction", zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID), zap.String("emoji", emoji))
+	attempt := 0
 	return WithRetry(ctx, func() error {
-		_, err := api.MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
+		attempt++
+		start := time.Now()
+		reply, err := api.MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
 			Peer:     peerToInput(peer),
 			MsgID:    msgID,
 			Reaction: buildReactionArg(emoji),
 		})
+		// Reaction trace (#248): the reply is where Telegram states the set it
+		// ended up with. Its updates also reach the dispatcher through the
+		// update hook, so this line is what pairs them with this request.
 		if err != nil {
 			c.log.Error("MessagesSendReaction failed", zap.Error(err))
+			c.traceLog.Debug("reaction: send attempt failed",
+				zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID), zap.Int("attempt", attempt),
+				zap.Duration("took", time.Since(start)), zap.Error(err))
+			return err
 		}
-		return err
+		types, found := reactionsInReply(reply, msgID)
+		c.traceLog.Debug("reaction: send reply",
+			zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID), zap.String("emoji", emoji),
+			zap.Int("attempt", attempt), zap.Duration("took", time.Since(start)),
+			zap.Strings("updates", types), zap.String("reactions", found))
+		return nil
 	})
 }
 

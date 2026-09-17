@@ -148,6 +148,19 @@ func setupDispatcher(
 		msg.AppliedPosition = pts
 		log.Debug("dispatcher: edit message",
 			zap.Int64("chat_id", msg.ChatID), zap.Int("msg_id", msg.ID))
+		// Reaction trace (#248): an edit writes the reaction set wholesale, so
+		// what it carried - or that it carried no reactions field at all - is
+		// what tells a stale copy apart from a real change.
+		if m, ok := raw.(*tg.Message); ok {
+			reactions, minSet, mine := "absent", false, false
+			if mr, has := m.GetReactions(); has {
+				reactions, minSet, mine = formatTGReactions(mr), mr.Min, hasMyRecentReaction(mr)
+			}
+			log.Debug("reaction: edit",
+				zap.Int64("chat_id", msg.ChatID), zap.Int("msg_id", msg.ID), zap.Int("pts", pts),
+				zap.String("reactions", reactions), zap.Bool("min", minSet), zap.Bool("my_recent", mine),
+				zap.Bool("edit_hide", m.EditHide))
+		}
 		evt := store.Event{Kind: store.EventEditMessage, Message: msg}
 		// A hidden edit that carries an unread reaction (1:1 chats deliver peer
 		// reactions this way) enriches the event for the reaction notification.
@@ -194,6 +207,11 @@ func setupDispatcher(
 		if chatID == 0 {
 			return nil
 		}
+		log.Debug("reaction: update",
+			zap.Int64("chat_id", chatID), zap.Int("msg_id", upd.MsgID),
+			zap.String("reactions", formatTGReactions(upd.Reactions)),
+			zap.Bool("min", upd.Reactions.Min), zap.Bool("my_recent", hasMyRecentReaction(upd.Reactions)),
+			zap.Int("recent", len(upd.Reactions.RecentReactions)))
 		reactions := convertReactions(upd.Reactions)
 		emoji, date, _ := newestUnreadReaction(upd.Reactions)
 		select {
