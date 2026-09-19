@@ -16,6 +16,9 @@ import (
 // the wire update before pts-tracking sees it. updates.Manager drops these
 // events when a pts gap exists (the pending buffer never flushes), so we must
 // intercept them here to guarantee delivery.
+//
+// No upstream issue tracks the drop yet; the entry in docs/gotd-workarounds.md
+// says what would retire this.
 type outboxHook struct {
 	next        telegram.UpdateHandler
 	mustDeliver chan<- store.Event

@@ -31,7 +31,7 @@ import (
 // no-op rather than a second arrival (ADR 0016).
 //
 // Upstream fix: gotd/td#1854. Delete this when it ships in a release, and the
-// same for the entry it has in the workaround list.
+// same for the entry it has in docs/gotd-workarounds.md.
 type commonDiffAPI struct {
 	updates.API
 	handler telegram.UpdateHandler

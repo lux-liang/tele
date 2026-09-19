@@ -217,7 +217,7 @@ func TestStand_TheFinalTextSurvivesACommonPtsGap(t *testing.T) {
 // and the message keeps the text it had before the gap.
 //
 // When this test starts failing, gotd/td#1854 has landed: delete the wrapper,
-// this test, and the entry both have in the workaround list (#270).
+// this test, and the entry both have in docs/gotd-workarounds.md (#270).
 func TestStand_WithoutTheWrapperTheFinalTextIsLost(t *testing.T) {
 	manager, api, st := stand(t, false)
 	api.arm()

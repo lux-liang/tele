@@ -12,8 +12,8 @@ Installation and a quick tour live in the [root README](../README.md).
 
 ## Working on tele
 
-- [Development](development.md) - building from source, the Nix flake
+- [Development](development.md) - building from source, the Nix flake, upgrading gotd
+- [gotd workarounds](gotd-workarounds.md) - defects in gotd tele works around, and what retires each one
 - [Spec](spec.md) - the product spec (in Russian)
-- [Architecture decisions](adr/) - one record per decision, numbered
 - Past code reviews: [2026-06-03](code-review-2026-06-03.md) ([ru](code-review-2026-06-03.ru.md)), [2026-06-09](code-review-2026-06-09.ru.md)
 - [`superpowers/`](superpowers/) - per-issue plans and specs kept while the work is in flight

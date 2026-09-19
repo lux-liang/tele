@@ -43,6 +43,11 @@ const maxChannelDiffConcurrency = 8
 // Only the timeout is touched. The difference itself reaches the manager
 // unchanged, the too-long variant included, so the gap repair behind it still
 // runs (#262).
+//
+// Upstream fix: gotd/td#1852. Delete this when it ships in a release, and the
+// same for the entry it has in docs/gotd-workarounds.md.
+// maxChannelDiffConcurrency stays either way: it bounds the startup burst on
+// its own merits.
 type channelDiffAPI struct {
 	updates.API
 	log *zap.Logger
