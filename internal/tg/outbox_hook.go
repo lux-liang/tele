@@ -17,8 +17,9 @@ import (
 // events when a pts gap exists (the pending buffer never flushes), so we must
 // intercept them here to guarantee delivery.
 //
-// No upstream issue tracks the drop yet; the entry in docs/gotd-workarounds.md
-// says what would retire this.
+// Upstream issue: gotd/td#1853, the same buffer discard as common_diff.go
+// works around. Whether its fix covers a read the difference never replays is
+// an open question; docs/gotd-workarounds.md holds the answer when it arrives.
 type outboxHook struct {
 	next        telegram.UpdateHandler
 	mustDeliver chan<- store.Event

@@ -37,8 +37,8 @@ closes one place where gotd lets an update fall through.
 | Workaround | Where | Issue | Retired by | Status (gotd v0.162.0) |
 |---|---|---|---|---|
 | Channel difference cooldown stripped | `internal/tg/channel_diff.go` | [#266](https://github.com/sorokin-vladimir/tele/issues/266) | [gotd/td#1852](https://github.com/gotd/td/issues/1852) | open, no fix yet |
-| Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1854](https://github.com/gotd/td/pull/1854) | PR open, not merged |
-| Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | no upstream issue yet | - |
+| Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1854](https://github.com/gotd/td/pull/1854), for [gotd/td#1853](https://github.com/gotd/td/issues/1853) | PR open, not merged |
+| Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | [gotd/td#1853](https://github.com/gotd/td/issues/1853) | open, and the fix may not cover our case |
 
 ### Channel difference cooldown stripped
 
@@ -87,6 +87,15 @@ discarded. Our messages then stay unread on screen.
 two updates out of every envelope before the manager sees it. It also logs the
 type of every arriving update, which is the only record of what the server
 actually pushed.
+
+This is the same buffer-discard mechanism as the entry above, reported upstream
+as gotd/td#1853, which gotd/td#1854 is meant to fix. The fix dispatches the
+updates a difference replays, and that may not be enough here: the tripwire
+below drops a receipt the difference never mentions at all. We asked upstream
+which of the two it is
+([comment](https://github.com/gotd/td/issues/1853#issuecomment-5750104496)). If
+a difference is authoritative for its whole range, dropping the receipt is
+correct and this workaround stays on our side regardless of the fix.
 
 - Tripwire: `TestStand_WithoutTheHookAnOutboxReadBehindAGapIsLost`
   (`internal/tg/outbox_gap_stand_test.go`)
