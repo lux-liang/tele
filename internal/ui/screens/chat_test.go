@@ -1,15 +1,19 @@
 package screens_test
 
 import (
+	"fmt"
+	"image/color"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -512,7 +516,9 @@ func TestChatModel_TypingLabel_EmptyByDefault(t *testing.T) {
 func TestChatModel_SetTypingLabel_ShowsInLabel(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	m.SetTypingLabel("typing")
-	label := m.TypingLabel()
+	// Stripped: the label carries the active theme's style now (#260), and what
+	// this test is about is the text under it.
+	label := xansi.Strip(m.TypingLabel())
 	assert.True(t, strings.HasPrefix(label, "typing"), "got %q", label)
 	assert.Equal(t, len("typing")+3, len(label), "dots suffix must be 3 chars")
 }
@@ -835,4 +841,58 @@ func TestChat_RoutesFlashOffToComposer(t *testing.T) {
 	newPane, _ = m.Update(components.ComposerFlashOffMsg{Serial: m.ComposerFlashSerial()})
 	m = newPane.(*screens.ChatModel)
 	assert.False(t, m.ComposerFlashActive(), "the flash-off tick must clear the border")
+}
+
+// bgSeq is the escape a true-colour background is emitted as.
+func bgSeq(c color.Color) string {
+	r, g, b, _ := c.RGBA()
+	return fmt.Sprintf("48;2;%d;%d;%d", r>>8, g>>8, b>>8)
+}
+
+// paintedTheme installs a theme claiming the canvas for the duration of the
+// test, and restores the built-ins after it.
+func paintedTheme(t *testing.T) theme.Theme {
+	t.Helper()
+	bg, err := theme.ParseColor("#1e1e2e")
+	require.NoError(t, err)
+	fg, err := theme.ParseColor("#cdd6f4")
+	require.NoError(t, err)
+
+	painted := theme.TeleDark
+	painted.Name = "typing-label-test"
+	painted.Background, painted.Text = bg, fg
+
+	t.Cleanup(func() {
+		theme.SetSlots(theme.Slots{Dark: theme.TeleDark, Light: theme.TeleLight})
+		theme.Apply(true)
+	})
+	theme.SetSlots(theme.Slots{Dark: painted, Light: painted})
+	theme.Apply(true)
+	return painted
+}
+
+// The label goes into the pane's top border as a pre-styled suffix: RenderBox
+// paints the spaces around it and nothing else, so an unpainted label is a hole
+// in the border for as long as the peer types (#260).
+func TestChatModel_TypingLabel_CarriesTheCanvas(t *testing.T) {
+	painted := paintedTheme(t)
+
+	m := screens.NewChatModel(80, 24)
+	m.SetTypingLabel("Alice is typing")
+	label := m.TypingLabel()
+
+	assert.Contains(t, label, bgSeq(painted.Background), "every cell of the label must carry the canvas")
+	assert.Contains(t, label, "Alice is typing", "and the text itself is unchanged")
+}
+
+// Both built-ins leave the canvas unset, and a theme that claims no canvas must
+// render exactly as it did before the label was painted at all.
+func TestChatModel_TypingLabel_AddsNoBackgroundWithoutACanvas(t *testing.T) {
+	theme.SetSlots(theme.Slots{Dark: theme.TeleDark, Light: theme.TeleLight})
+	theme.Apply(true)
+
+	m := screens.NewChatModel(80, 24)
+	m.SetTypingLabel("Alice is typing")
+
+	assert.NotContains(t, m.TypingLabel(), "48;2;", "an unset canvas paints no background")
 }

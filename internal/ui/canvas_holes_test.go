@@ -10,7 +10,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
@@ -481,6 +483,80 @@ func TestCanvas_SelectedIncomingHasNoHoles(t *testing.T) {
 			m = pressKey('k')(t, m)
 			found := holes(m.View().Content, size.w, size.h)
 			require.Empty(t, found, report(found, "background"))
+		})
+	}
+}
+
+// The chat pane title carries an indicator beside it, and which one depends on
+// state no other scan here reaches: every test above renders the pane idle. The
+// typing label was unpainted for as long as it existed (#260), and the online
+// dot is scanned with it because the two share the same slot in the border.
+func TestCanvas_ChatTitleIndicatorsHaveNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	for _, tc := range []struct {
+		name  string
+		build func(testing.TB, int, int) ui.RootModel
+	}{
+		{"typing", func(t testing.TB, w, h int) ui.RootModel {
+			m := newPopulatedRoot(t, w, h)
+			next, _ := m.Update(core.Typing{ChatID: m.CurrentChatID(), Label: "Contact 1 is typing"})
+			m = next.(ui.RootModel)
+			require.True(t, m.Chat().IsTyping(), "the label has to be up, or the scan proves nothing")
+			return m
+		}},
+		{"peer-online", func(t testing.TB, w, h int) ui.RootModel {
+			// Every third contact in the fixture is online; chat 1, which the
+			// fixture opens, is not.
+			m := openChat(t, newPopulatedRoot(t, w, h), 3, "Contact 3")
+			require.True(t, m.Chat().PeerOnline(), "the dot has to be up, or the scan proves nothing")
+			return m
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, size := range scanSizes {
+				t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
+					m := tc.build(t, size.w, size.h)
+					found := holes(m.View().Content, size.w, size.h)
+					require.Empty(t, found, report(found, "background"))
+				})
+			}
+		})
+	}
+}
+
+// Both panes show a spinner while they wait for their first data, and neither
+// state is reachable from a populated fixture: the scans above open a chat that
+// has already loaded into a list that already has rows (#260).
+func TestCanvas_LoadingPanesHaveNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	for _, tc := range []struct {
+		name  string
+		build func(testing.TB, int, int) ui.RootModel
+	}{
+		{"chat-pane", func(t testing.TB, w, h int) ui.RootModel {
+			m := newPopulatedRoot(t, w, h)
+			m.Chat().SetLoading(true)
+			return m
+		}},
+		{"chat-list", func(t testing.TB, w, h int) ui.RootModel {
+			// An account whose dialogs have not arrived yet: the list has no
+			// rows to draw and says so.
+			m := newRoot(store.NewMemory(), 50, false).WithScreen(ui.ScreenMain)
+			next, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+			m = next.(ui.RootModel)
+			return toMain(t, m)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, size := range scanSizes {
+				t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
+					m := tc.build(t, size.w, size.h)
+					found := holes(m.View().Content, size.w, size.h)
+					require.Empty(t, found, report(found, "background"))
+				})
+			}
 		})
 	}
 }

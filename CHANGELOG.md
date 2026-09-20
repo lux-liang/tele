@@ -11,6 +11,16 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- Under a theme that paints the background, the "typing…" label in the chat
+  pane title no longer leaves a hole in the border. Its cells carried no colour
+  of the theme, so the terminal's own background showed through for as long as
+  the other person was typing, and the animated dots made the gap flicker.
+- The same in both panes while they load: "Loading…" in the chat pane and
+  "Loading chats…" in the chat list are painted now, so the first seconds after
+  launch look like the rest of the app.
+
 ## [1.11.7] - 2026-09-16
 
 ### Added

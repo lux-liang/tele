@@ -377,7 +377,18 @@ func (m *ChatModel) IsTyping() bool { return m.typingBase != "" }
 func (m *ChatModel) TickTypingDots() { m.typingDots.Tick() }
 
 // TypingLabel returns the animated typing label, or "" if no typing is active.
-func (m *ChatModel) TypingLabel() string { return m.typingDots.View(m.typingBase) }
+//
+// The label is painted here because this is where it is composed: RenderBox
+// frames it with its own spaces and takes the suffix already styled, the way
+// the online dot beside it arrives (#260). Body is what the pane title next to
+// it uses, so the two read as one line.
+func (m *ChatModel) TypingLabel() string {
+	label := m.typingDots.View(m.typingBase)
+	if label == "" {
+		return ""
+	}
+	return theme.S().Body.Render(label)
+}
 
 // SetKeyMap gives the chat model the active key map so the composer placeholder
 // can show the live "write" binding. Refreshes the placeholder immediately.
@@ -719,8 +730,9 @@ func (m *ChatModel) View() string {
 		if listH < 1 {
 			listH = 1
 		}
-		centered := lipgloss.Place(m.width, listH, lipgloss.Center, lipgloss.Center, m.spinner.View()+" Loading...")
-		return centered
+		return lipgloss.Place(m.width, listH, lipgloss.Center, lipgloss.Center,
+			theme.S().Body.Render(m.spinner.View()+" Loading..."),
+			lipgloss.WithWhitespaceStyle(theme.NewStyle()))
 	}
 	if m.loadErr != "" {
 		listH := m.height - m.composer.VisualHeight()

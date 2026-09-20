@@ -502,7 +502,9 @@ func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 
 func (m *ChatListModel) View() string {
 	if m.total == 0 {
-		return m.spinner.View() + " Loading chats..."
+		// Painted here: the pane this returns to frames the content and paints
+		// only what it adds itself (#260).
+		return theme.S().Body.Render(m.spinner.View() + " Loading chats...")
 	}
 	visible := m.height
 	if visible <= 0 {
