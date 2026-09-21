@@ -20,6 +20,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - The same in both panes while they load: "Loading…" in the chat pane and
   "Loading chats…" in the chat list are painted now, so the first seconds after
   launch look like the rest of the app.
+- Switching accounts now removes the previous account's database, queued
+  messages, media, and avatars before any of them are opened (#263).
 
 ## [1.11.7] - 2026-09-16
 

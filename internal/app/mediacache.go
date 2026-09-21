@@ -1,13 +1,12 @@
 package app
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 
 	"go.uber.org/zap"
 
+	"github.com/sorokin-vladimir/tele/internal/accountstate"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/mediacache"
 )
@@ -25,28 +24,19 @@ const tmpAvatarCacheBytes = 8 << 20
 // directory: the first 12 hex digits of the SHA-256 of the state directory.
 // Stable across runs, filename-safe, and it names nothing about the account.
 func accountSegment(stateDir string) string {
-	sum := sha256.Sum256([]byte(stateDir))
-	return hex.EncodeToString(sum[:])[:12]
+	return accountstate.Segment(stateDir)
 }
 
 // mediaCacheDir is where this account's media cache lives.
 func mediaCacheDir(stateDir string) (string, error) {
-	base, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "tele", accountSegment(stateDir), "media"), nil
+	return accountstate.MediaCacheDir(stateDir)
 }
 
 // avatarCacheDir is where this account's avatar cache lives: a sibling of the
 // media directory, never inside it, so the two bounds are enforced over
 // disjoint sets of files (#223).
 func avatarCacheDir(stateDir string) (string, error) {
-	base, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "tele", accountSegment(stateDir), "avatars"), nil
+	return accountstate.AvatarCacheDir(stateDir)
 }
 
 // removeLegacyMediaCache deletes the pre-#196 cache directory, which was shared
