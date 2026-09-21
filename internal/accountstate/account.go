@@ -16,6 +16,17 @@ import (
 
 const accountIDFile = "account.id"
 
+var errNoUserCache = errors.New("user cache directory unavailable")
+
+// CleanupReason describes why account-owned files were removed before startup.
+type CleanupReason string
+
+const (
+	CleanupIdentityChanged    CleanupReason = "identity changed"
+	CleanupNoSession          CleanupReason = "no session"
+	CleanupNoRecordedIdentity CleanupReason = "no recorded identity"
+)
+
 // Segment is the stable, filename-safe directory name for one state directory's
 // persistent caches.
 func Segment(stateDir string) string {
@@ -36,7 +47,7 @@ func AvatarCacheDir(stateDir string) (string, error) {
 func cacheDir(stateDir, name string) (string, error) {
 	base, err := os.UserCacheDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %v", errNoUserCache, err)
 	}
 	return filepath.Join(base, "tele", Segment(stateDir), name), nil
 }
@@ -44,17 +55,24 @@ func cacheDir(stateDir, name string) (string, error) {
 // Reconcile compares the session's auth key with the identity recorded at the
 // last successful sign-in. A missing, unreadable, or different identity clears
 // every account-owned file before any of them can be opened.
-func Reconcile(stateDir, sessionFile string) (bool, error) {
+func Reconcile(stateDir, sessionFile string) (bool, CleanupReason, error) {
 	sessionID, sessionErr := sessionIdentity(sessionFile)
 	recordedID, recordedErr := recordedIdentity(stateDir)
 	if sessionErr == nil && recordedErr == nil && sessionID == recordedID {
-		return false, nil
+		return false, "", nil
 	}
 
-	if err := clear(stateDir); err != nil {
-		return false, err
+	reason := CleanupIdentityChanged
+	switch {
+	case sessionErr != nil:
+		reason = CleanupNoSession
+	case recordedErr != nil:
+		reason = CleanupNoRecordedIdentity
 	}
-	return true, nil
+	if err := removeAccountFiles(stateDir); err != nil {
+		return false, reason, err
+	}
+	return true, reason, nil
 }
 
 // Record writes the current session identity after a successful sign-in.
@@ -95,7 +113,7 @@ func recordedIdentity(stateDir string) (string, error) {
 	return hex.EncodeToString(decoded), nil
 }
 
-func clear(stateDir string) error {
+func removeAccountFiles(stateDir string) error {
 	entries, err := os.ReadDir(stateDir)
 	if err != nil {
 		return fmt.Errorf("list %s: %w", stateDir, err)
@@ -107,15 +125,23 @@ func clear(stateDir string) error {
 			paths = append(paths, filepath.Join(stateDir, entry.Name()))
 		}
 	}
-	mediaDir, err := MediaCacheDir(stateDir)
-	if err != nil {
-		return fmt.Errorf("locate media cache: %w", err)
+	for _, cache := range []struct {
+		name    string
+		resolve func(string) (string, error)
+	}{
+		{name: "media cache", resolve: MediaCacheDir},
+		{name: "avatar cache", resolve: AvatarCacheDir},
+	} {
+		path, cacheErr := cache.resolve(stateDir)
+		if cacheErr == nil {
+			paths = append(paths, path)
+			continue
+		}
+		if errors.Is(cacheErr, errNoUserCache) {
+			continue
+		}
+		return fmt.Errorf("locate %s: %w", cache.name, cacheErr)
 	}
-	avatarDir, err := AvatarCacheDir(stateDir)
-	if err != nil {
-		return fmt.Errorf("locate avatar cache: %w", err)
-	}
-	paths = append(paths, mediaDir, avatarDir)
 
 	var removeErrors []error
 	for _, path := range paths {

@@ -177,13 +177,13 @@ func main() {
 		}
 	}
 
-	accountCleared, err := accountstate.Reconcile(cfg.StateDir, cfg.Telegram.SessionFile)
+	accountCleared, cleanupReason, err := accountstate.Reconcile(cfg.StateDir, cfg.Telegram.SessionFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "account state: %v\n", err)
 		os.Exit(1)
 	}
 	if accountCleared {
-		log.Info("cleared local state before opening a different account")
+		log.Info("cleared local state before startup", zap.String("reason", string(cleanupReason)))
 	}
 
 	a, err := app.New(cfgStore, log, *verbose, *trace)

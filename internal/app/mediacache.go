@@ -20,25 +20,6 @@ const tmpCacheBytes = 64 << 20
 // that keeps nothing between sessions still holds every face it drew.
 const tmpAvatarCacheBytes = 8 << 20
 
-// accountSegment is the per-account directory name inside the shared cache
-// directory: the first 12 hex digits of the SHA-256 of the state directory.
-// Stable across runs, filename-safe, and it names nothing about the account.
-func accountSegment(stateDir string) string {
-	return accountstate.Segment(stateDir)
-}
-
-// mediaCacheDir is where this account's media cache lives.
-func mediaCacheDir(stateDir string) (string, error) {
-	return accountstate.MediaCacheDir(stateDir)
-}
-
-// avatarCacheDir is where this account's avatar cache lives: a sibling of the
-// media directory, never inside it, so the two bounds are enforced over
-// disjoint sets of files (#223).
-func avatarCacheDir(stateDir string) (string, error) {
-	return accountstate.AvatarCacheDir(stateDir)
-}
-
 // removeLegacyMediaCache deletes the pre-#196 cache directory, which was shared
 // by every account and is now unreachable. It is a sibling of the per-account
 // directories, never a parent of one, so removing it cannot touch a live cache.
@@ -60,7 +41,7 @@ func openMediaCache(cfg *config.Config, tmpDir string, log *zap.Logger) (*mediac
 	if cfg.Photos.DiskCacheSize <= 0 {
 		return mediacache.New(filepath.Join(tmpDir, "media"), tmpCacheBytes)
 	}
-	dir, err := mediaCacheDir(cfg.StateDir)
+	dir, err := accountstate.MediaCacheDir(cfg.StateDir)
 	if err != nil {
 		log.Warn("no user cache directory; caching media in the temp directory instead", zap.Error(err))
 		return mediacache.New(filepath.Join(tmpDir, "media"), tmpCacheBytes)
@@ -75,7 +56,7 @@ func openAvatarCache(cfg *config.Config, tmpDir string, log *zap.Logger) (*media
 	if cfg.Avatars.DiskCacheSize <= 0 {
 		return mediacache.New(filepath.Join(tmpDir, "avatars"), tmpAvatarCacheBytes)
 	}
-	dir, err := avatarCacheDir(cfg.StateDir)
+	dir, err := accountstate.AvatarCacheDir(cfg.StateDir)
 	if err != nil {
 		log.Warn("no user cache directory; caching avatars in the temp directory instead", zap.Error(err))
 		return mediacache.New(filepath.Join(tmpDir, "avatars"), tmpAvatarCacheBytes)
